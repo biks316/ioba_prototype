@@ -1,52 +1,89 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"log"
-	"os/exec"
+	"net/http"
+	"os"
 
 	"gopkg.in/yaml.v3"
 )
 
-// Action defines a single action inside an intent
 type Action struct {
-	Type    string `yaml:"type"` // "log" or "execute"
-	Message string `yaml:"message,omitempty"`
-	Command string `yaml:"command,omitempty"`
+	Type     string `yaml:"type"`
+	Message  string `yaml:"message,omitempty"`
+	Command  string `yaml:"command,omitempty"`
+	Username string `yaml:"username,omitempty"`
+	URL      string `yaml:"url,omitempty"`
 }
 
-// Intent defines a high-level goal
 type Intent struct {
 	Name        string   `yaml:"name"`
 	Description string   `yaml:"description"`
 	Actions     []Action `yaml:"actions"`
 }
 
-// IntentSpec holds all intents
 type IntentSpec struct {
 	Intents []Intent `yaml:"intents"`
 }
 
-// Executes a single action
+// In-memory user store
+var users = make(map[string]bool)
+
+// Execute action based on type
 func executeAction(a Action) {
 	switch a.Type {
 	case "log":
 		fmt.Println("[LOG]:", a.Message)
-	case "execute":
-		fmt.Println("[EXEC]:", a.Command)
-		out, err := exec.Command("bash", "-c", a.Command).Output()
-		if err != nil {
-			log.Println("Error executing command:", err)
-		} else {
-			fmt.Println(string(out))
+	case "create_user":
+		if a.Username != "" {
+			users[a.Username] = true
+			fmt.Println("[USER]: Created user", a.Username)
+			logAction(fmt.Sprintf("Created user: %s", a.Username))
 		}
-	default:
-		fmt.Println("Unknown action type:", a.Type)
+	case "delete_user":
+		if a.Username != "" {
+			delete(users, a.Username)
+			fmt.Println("[USER]: Deleted user", a.Username)
+			logAction(fmt.Sprintf("Deleted user: %s", a.Username))
+		}
+	case "http_get":
+		if a.URL != "" {
+			client := &http.Client{}
+			req, err := http.NewRequest("GET", a.URL, nil)
+			if err != nil {
+				fmt.Println("[HTTP ERROR]:", err)
+				break
+			}
+			// Set proper header for JSON response
+			req.Header.Set("Accept", "application/json")
+
+			resp, err := client.Do(req)
+			if err != nil {
+				fmt.Println("[HTTP ERROR]:", err)
+				break
+			}
+			defer resp.Body.Close()
+			body, _ := ioutil.ReadAll(resp.Body)
+			fmt.Println("[HTTP RESPONSE]:", string(body))
+		}
 	}
 }
 
-// Executes an intent by name
+// Simple log to file
+func logAction(entry string) {
+	f, err := os.OpenFile("ioba.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	if err != nil {
+		log.Println("Failed to log:", err)
+		return
+	}
+	defer f.Close()
+	f.WriteString(entry + "\n")
+}
+
+// Execute intent by name
 func executeIntent(spec IntentSpec, intentName string) {
 	for _, intent := range spec.Intents {
 		if intent.Name == intentName {
@@ -57,16 +94,15 @@ func executeIntent(spec IntentSpec, intentName string) {
 			return
 		}
 	}
-	fmt.Println("Intent not found:", intentName)
+	fmt.Println("[WARN]: Intent not found:", intentName)
 }
 
-// Helper function: load YAML
+// Load YAML
 func loadIntents(filePath string) IntentSpec {
 	data, err := ioutil.ReadFile(filePath)
 	if err != nil {
 		log.Fatal("Failed to read YAML:", err)
 	}
-
 	var spec IntentSpec
 	if err := yaml.Unmarshal(data, &spec); err != nil {
 		log.Fatal("Failed to parse YAML:", err)
@@ -74,15 +110,16 @@ func loadIntents(filePath string) IntentSpec {
 	return spec
 }
 
-// Starter template: Generate a PoC prototype
 func main() {
-	// Load intents from YAML
 	spec := loadIntents("intent.yml")
 
-	// Example: iterate over all intents and execute
+	// Run all intents
 	for _, intent := range spec.Intents {
 		executeIntent(spec, intent.Name)
 	}
 
-	fmt.Println("✅ IOBA prototype execution finished")
+	// Show current users
+	usersJSON, _ := json.Marshal(users)
+	fmt.Println("Current users:", string(usersJSON))
+	fmt.Println("✅ IOBA prototype finished")
 }
