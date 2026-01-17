@@ -1,0 +1,16 @@
+intents:
+  - name: CreateUser
+    description: "Create a new user in the system"
+    actions:
+      - type: log
+        message: "Creating user..."
+      - type: execute
+        command: "echo 'User created!'"
+
+  - name: DeleteUser
+    description: "Delete a user from the system"
+    actions:
+      - type: log
+        message: "Deleting user..."
+      - type: execute
+        command: "echo 'User deleted!'"
