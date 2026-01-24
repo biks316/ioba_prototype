@@ -22,3 +22,11 @@ intents:
         message: "Fetching joke..."
       - type: http_get
         url: "https://icanhazdadjoke.com/"
+
+  - name: GetWeather
+    description: "Get the current weather for a city"
+    actions:
+      - type: log
+        message: "Getting weather..."
+      - type: http_get
+        url: "https://api.weatherapi.com/v1/current.json?key=YOUR_API_KEY&q=London"
